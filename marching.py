@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 import cv2
-
+import blob
 
 def compute_area(poly):
     """
@@ -204,7 +204,8 @@ def check_holes(polys):
 
 
 if __name__ == '__main__':
-    vertices = np.array([[[20,20],[60,20],[60,60],[20,60],[10,50],[10,30],[30,30],[15,35],[20,40]]])*5
+    # vertices = np.array([[[20,20],[60,20],[60,60],[20,60],[10,50],[10,30],[30,30],[15,35],[20,40]]])*5
+    vertices = blob.mouse()
 
     # Check that the vertices are given in clockwise ordering
     rays_formulae = all_self_intersections(vertices[0])
@@ -215,7 +216,7 @@ if __name__ == '__main__':
     # New vertices has in its third column a flag indicating if the vertex is a self-intersection (!= -1), or a normal vertex (-1)
     # The value on this third column is the index of the edge where it this intersectio blongs.
 
-    im = np.zeros([400, 400, 3], dtype=np.uint8)
+    im = np.zeros([700, 700, 3], dtype=np.uint8)
     
     cv2.drawContours(im, [vertices], 0, (255, 255, 255), 1)
 
