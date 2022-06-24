@@ -3,10 +3,9 @@ import matplotlib.pyplot as plt
 
 
 def get_alias_cut(a1, a2, vertices, paint_it=False, left2right=True):
-    left_node = '%s%i%s' % (chr(97 + int(vertices[a1, 2])), int(vertices[a1, -1])+1, '\'' if vertices[a1, -2] < 0.5 else '')
-    right_node = '%s%i%s' % (chr(97 + int(vertices[a2, 2])), int(vertices[a2, -1])+1, '\'' if vertices[a2, -2] < 0.5 else '')
-
     if paint_it:
+        left_node = '%s%i%s' % (chr(97 + int(vertices[a1, 2])), int(vertices[a1, -1])+1, '\'' if vertices[a1, -2] < 0.5 else '')
+        right_node = '%s%i%s' % (chr(97 + int(vertices[a2, 2])), int(vertices[a2, -1])+1, '\'' if vertices[a2, -2] < 0.5 else '')
         plt.plot(vertices[:, 0], vertices[:, 1], 'b:')
         n_vertices = vertices.shape[0]
         if left2right:
@@ -30,19 +29,17 @@ def get_alias_cut(a1, a2, vertices, paint_it=False, left2right=True):
                 plt.plot(x, y, 'b.')
         plt.title(left_node + ',' + right_node + (',L' if left2right else ',R'))
         plt.show()
+        return left_node + ',' + right_node + (',L' if left2right else ',R')
+
+    elif left2right:
+        left_node = a1
+        right_node = a2
     
-    return left_node + ',' + right_node
+    else:
+        left_node = a2
+        right_node = a1
 
-
-def append_node(a1, a2, child_a1, child_a2, vertices, visited):
-    cut_id = get_alias_cut(a1, a2, vertices)
-    curr_node = visited['validity_tree'].get(cut_id, {'v_id': (a1, a2), 'children': []})
-
-    if child_a1 is not None and child_a2 is not None:
-        child_cut_id = get_alias_cut(child_a1, child_a2, vertices)
-        curr_node['children'].append(child_cut_id)
-    
-    visited['validity_tree'][cut_id] = curr_node
+    return (left_node, right_node)
 
 
 def get_next_cut(a, vertices, same_ray=True, sign=1):
@@ -204,18 +201,16 @@ def check_adjacency(a1, a2, vertices, left2right=True):
     return not is_not_adjacent
 
 
-def left_condition_1(a1, a2, vertices, **kwargs):
+def left_condition_1(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
     is_left_valid = check_adjacency(a1, a2, vertices, left2right=True)
-    if is_left_valid:
-        append_node(a1, a2, None, None, vertices, kwargs['visited'])
 
     return is_left_valid
 
 
-def left_condition_2(a1, a2, vertices, **kwargs):
+def left_condition_2(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -228,13 +223,14 @@ def left_condition_2(a1, a2, vertices, **kwargs):
     if not (check_adjacency(a1, b1, vertices, left2right=True) and check_adjacency(b2, a2, vertices, left2right=True)):
         return None
 
-    is_left_valid = check_left_validity(b1, b2, vertices, **kwargs)
-    append_node(a1, a2, b1, b2, vertices, kwargs['visited'])
+    child_id = get_alias_cut(b1, b2, vertices, left2right=True)
+    validity_tree[child_id] = {}
+    is_left_valid = check_left_validity(b1, b2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
     return is_left_valid
 
 
-def left_condition_3(a1, a2, vertices, **kwargs):
+def left_condition_3(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -265,12 +261,14 @@ def left_condition_3(a1, a2, vertices, **kwargs):
             continue
 
         # Check if point a3' and a1 are left valid
-        is_left_valid = check_left_validity(a1, a3, vertices, **kwargs)
-        append_node(a1, a2, a1, a3, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a1, a3, vertices, left2right=True)
+        validity_tree[child_id] = {}
+        is_left_valid = check_left_validity(a1, a3, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         # Check if point a2' and a4 are left valid
-        is_right_valid = check_left_validity(a4, a2, vertices, **kwargs)
-        append_node(a1, a2, a4, a2, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a4, a2, vertices, left2right=True)
+        validity_tree[child_id] = {}
+        is_right_valid = check_left_validity(a4, a2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -289,7 +287,7 @@ def left_condition_3(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-def left_condition_4(a1, a2, vertices, **kwargs):
+def left_condition_4(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -317,12 +315,14 @@ def left_condition_4(a1, a2, vertices, **kwargs):
             break
 
         # Check if that point and a1 are left valid
-        is_left_valid = check_left_validity(a1, a_p, vertices, **kwargs)
-        append_node(a1, a2, a1, a_p, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a1, a_p, vertices, left2right=True)
+        validity_tree[child_id] = {}
+        is_left_valid = check_left_validity(a1, a_p, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         # Check if that point and a3 are right valid
-        is_right_valid = check_right_validity(a3, a_p, vertices, **kwargs)
-        append_node(a1, a2, a3, a_p, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a3, a_p, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_right_valid = check_right_validity(a3, a_p, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -341,7 +341,7 @@ def left_condition_4(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-def left_condition_5(a1, a2, vertices, **kwargs):
+def left_condition_5(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -369,12 +369,14 @@ def left_condition_5(a1, a2, vertices, **kwargs):
             break
 
         # Check if that point and a2' are left valid
-        is_left_valid = check_left_validity(a_p, a2, vertices, **kwargs)
-        append_node(a1, a2, a_p, a2, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a_p, a2, vertices, left2right=True)
+        validity_tree[child_id] = {}
+        is_left_valid = check_left_validity(a_p, a2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         # Check if that point and a3 are right valid
-        is_right_valid = check_right_validity(a_p, a3, vertices, **kwargs)
-        append_node(a1, a2, a_p, a3, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a_p, a3, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_right_valid = check_right_validity(a_p, a3, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -393,18 +395,16 @@ def left_condition_5(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-def right_condition_1(a1, a2, vertices, **kwargs):
+def right_condition_1(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
     is_right_valid = check_adjacency(a1, a2, vertices, left2right=False)
-    if is_right_valid:
-        append_node(a1, a2, None, None, vertices, kwargs['visited'])
-    
+
     return is_right_valid
 
 
-def right_condition_2(a1, a2, vertices, **kwargs):
+def right_condition_2(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -417,13 +417,14 @@ def right_condition_2(a1, a2, vertices, **kwargs):
     if not (check_adjacency(a1, b1, vertices, left2right=False) and check_adjacency(b2, a2, vertices, left2right=False)):
         return None
 
-    is_right_valid = check_right_validity(b1, b2, vertices, **kwargs)
-    append_node(a1, a2, b1, b2, vertices, kwargs['visited'])
+    child_id = get_alias_cut(b1, b2, vertices, left2right=False)
+    validity_tree[child_id] = {}
+    is_right_valid = check_right_validity(b1, b2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
     return is_right_valid
 
 
-def right_condition_3(a1, a2, vertices, **kwargs):
+def right_condition_3(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -455,12 +456,14 @@ def right_condition_3(a1, a2, vertices, **kwargs):
             continue
 
         # Check if point a3' and a1 are right valid
-        is_left_valid = check_right_validity(a1, a3, vertices, **kwargs)
-        append_node(a1, a2, a1, a3, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a1, a3, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_left_valid = check_right_validity(a1, a3, vertices, validity_tree=validity_tree, **kwargs)
 
         # Check if point a2' and a4 are right valid
-        is_right_valid = check_right_validity(a4, a2, vertices, **kwargs)
-        append_node(a1, a2, a4, a2, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a4, a2, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_right_valid = check_right_validity(a4, a2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -479,8 +482,7 @@ def right_condition_3(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-
-def right_condition_4(a1, a2, vertices, **kwargs):
+def right_condition_4(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -508,13 +510,15 @@ def right_condition_4(a1, a2, vertices, **kwargs):
             break
 
         # Check if that point and a1 are left valid
-        is_left_valid = check_right_validity(a1, a_p, vertices, **kwargs)
-        append_node(a1, a2, a1, a_p, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a1, a_p, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_left_valid = check_right_validity(a1, a_p, vertices, validity_tree=validity_tree[child_id], **kwargs)
         
 
         # Check if that point and a3 are right valid
-        is_right_valid = check_left_validity(a3, a_p, vertices, **kwargs)
-        append_node(a1, a2, a3, a_p, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a3, a_p, vertices, left2right=True)
+        validity_tree[child_id] = {}
+        is_right_valid = check_left_validity(a3, a_p, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -533,7 +537,7 @@ def right_condition_4(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-def right_condition_5(a1, a2, vertices, **kwargs):
+def right_condition_5(a1, a2, vertices, validity_tree, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -560,12 +564,14 @@ def right_condition_5(a1, a2, vertices, **kwargs):
             break
 
         # Check if that point and a1 are right valid
-        is_right_valid = check_right_validity(a_p, a2, vertices, **kwargs)
-        append_node(a1, a2, a_p, a2, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a_p, a2, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_right_valid = check_right_validity(a_p, a2, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         # Check if that point and a3 are left valid
-        is_left_valid = check_left_validity(a_p, a3, vertices, **kwargs)
-        append_node(a1, a2, a_p, a3, vertices, kwargs['visited'])
+        child_id = get_alias_cut(a_p, a3, vertices, left2right=False)
+        validity_tree[child_id] = {}
+        is_left_valid = check_left_validity(a_p, a3, vertices, validity_tree=validity_tree[child_id], **kwargs)
 
         if is_left_valid is None and is_right_valid is None:
             continue
@@ -584,7 +590,7 @@ def right_condition_5(a1, a2, vertices, **kwargs):
     return is_valid
 
 
-def left_invalid_condition_1(a1, a2, vertices, **kwargs):
+def left_invalid_condition_1(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -609,7 +615,7 @@ def left_invalid_condition_1(a1, a2, vertices, **kwargs):
     return not (vertices[a1, -1] < vertices[a3, -1] < vertices[a2, -1])
 
 
-def left_invalid_condition_2(a1, a2, vertices, **kwargs):
+def left_invalid_condition_2(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -634,7 +640,7 @@ def left_invalid_condition_2(a1, a2, vertices, **kwargs):
     return not (vertices[a1, -1] < vertices[a3, -1] < vertices[a2, -1])
 
 
-def left_invalid_condition_3(a1, a2, vertices, **kwargs):
+def left_invalid_condition_3(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
 
@@ -667,7 +673,7 @@ def left_invalid_condition_3(a1, a2, vertices, **kwargs):
     return not len(a1_b2_int.intersection(b1_a2_int)) > 0
 
 
-def right_invalid_condition_1(a1, a2, vertices, **kwargs):
+def right_invalid_condition_1(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -692,7 +698,7 @@ def right_invalid_condition_1(a1, a2, vertices, **kwargs):
     return not (vertices[a1, -1] < vertices[a3, -1] < vertices[a2, -1])
 
 
-def right_invalid_condition_2(a1, a2, vertices, **kwargs):
+def right_invalid_condition_2(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -717,7 +723,7 @@ def right_invalid_condition_2(a1, a2, vertices, **kwargs):
     return not (vertices[a1, -1] < vertices[a3, -1] < vertices[a2, -1])
 
 
-def right_invalid_condition_3(a1, a2, vertices, **kwargs):
+def right_invalid_condition_3(a1, a2, vertices):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -757,16 +763,16 @@ all_left_invalid_conditions = [left_invalid_condition_1, left_invalid_condition_
 all_right_invalid_conditions = [right_invalid_condition_1, right_invalid_condition_2, right_invalid_condition_3]
 
 
-def check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visited):
+def check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, validity_tree, visited):
     cut_id = get_alias_cut(a1, a2, vertices, paint_it=False, left2right=True)
-    left_is_valid = visited['validity'].get(cut_id + ',L', None)
+    left_is_valid = visited.get(cut_id, None)
 
     if left_is_valid is None:        
-        visited['validity'][cut_id + ',L'] = 'Explored'
+        visited[cut_id] = 'Explored'
 
         left_is_valid = True
         for condition in all_left_invalid_conditions:
-            resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, visited=visited)
+            resp = condition(a1, a2, vertices)
             if resp is not None:
                 left_is_valid &= resp
             if not left_is_valid:
@@ -776,11 +782,11 @@ def check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visite
             # This cut is not left valid until the contrary is proven
             left_is_valid = False
             for condition in all_left_valid_conditions:
-                resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, visited=visited)
+                resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, validity_tree=validity_tree, visited=visited)
                 if resp is not None:
                     left_is_valid |= resp
             
-        visited['validity'][cut_id + ',L'] = left_is_valid
+        visited[cut_id] = left_is_valid
 
     elif left_is_valid == 'Explored':
         return None
@@ -788,16 +794,16 @@ def check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visite
     return left_is_valid
 
 
-def check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visited):    
+def check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, validity_tree, visited):    
     cut_id = get_alias_cut(a1, a2, vertices, paint_it=False, left2right=False)
-    right_is_valid = visited['validity'].get(cut_id + ',R', None)
+    right_is_valid = visited.get(cut_id, None)
     
     if right_is_valid is None:
-        visited['validity'][cut_id + ',R'] = 'Explored'
+        visited[cut_id] = 'Explored'
 
         right_is_valid = True
         for condition in all_right_invalid_conditions:
-            resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, visited=visited)
+            resp = condition(a1, a2, vertices)
             if resp is not None:
                 right_is_valid &= resp
             if not right_is_valid:
@@ -807,12 +813,12 @@ def check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visit
             # This cut is not right valid until the contrary is proven
             right_is_valid = False
             for condition in all_right_valid_conditions:
-                resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, visited=visited)
+                resp = condition(a1, a2, vertices, max_crest_cuts=max_crest_cuts, min_crest_cuts=min_crest_cuts, validity_tree=validity_tree, visited=visited)
                 
                 if resp is not None:
                     right_is_valid |= resp
 
-        visited['validity'][cut_id + ',R'] = right_is_valid
+        visited[cut_id] = right_is_valid
 
     elif right_is_valid == 'Explored':
         return None
@@ -822,9 +828,24 @@ def check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visit
 
 def check_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts):
     cut_id = get_alias_cut(a1, a2, vertices)
-    visited = {'validity': {}, 'validity_tree': {'root': [cut_id]}}
+    visited = {}
 
-    left_is_valid = check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visited)
-    right_is_valid = check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visited)
+    validity_tree = {cut_id: {}}
+    check_left_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, validity_tree[cut_id], visited)
+    check_right_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, validity_tree[cut_id], visited)
     
-    return visited
+    return visited, validity_tree
+
+
+def traverse_tree(validity_tree, visited):
+    valid_path = False
+    child_keys = list(validity_tree.keys())
+    for child_id in child_keys:
+        if validity_tree[child_id].keys():
+            valid_path |= traverse_tree(validity_tree[child_id], visited)
+        else:
+            leaf_is_valid = visited.get(child_id, None)
+            if not leaf_is_valid:
+                validity_tree.pop(child_id)
+
+    return valid_path

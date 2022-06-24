@@ -5,7 +5,7 @@ import numpy as np
 import blob
 from functools import reduce
 
-from validitycriteria import check_validity
+from validitycriteria import check_validity, traverse_tree
 
 
 def get_root_indices(vertices):
@@ -334,15 +334,16 @@ def poly_subdivision(vertices):
     left_idx, right_idx = get_root_indices(new_vertices)
 
     # The root is then the right validity check of this cut
-    visited = check_validity(left_idx, right_idx, new_vertices, new_max_crest_cuts, new_min_crest_cuts)
-
-    print(visited['validity'])
-    print(visited['validity_tree'])
+    visited, validity_tree = check_validity(left_idx, right_idx, new_vertices, new_max_crest_cuts, new_min_crest_cuts)
 
     plt.plot(new_vertices[:, 0], new_vertices[:, 1], 'b-')
     for (_, rs_y, _), _ in rays_formulae:
         plt.plot([np.min(vertices[:, 0]) - 10, np.max(vertices[:, 0]) + 10], [rs_y, rs_y], 'c:')
     plt.show()
+    
+    valid_cuts_tree = traverse_tree(validity_tree, visited)
+    print(valid_cuts_tree)
+    print(validity_tree)
 
 
 if __name__ == '__main__':
