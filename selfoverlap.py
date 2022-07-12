@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 
-import blob
+import test_polys
 from functools import reduce
 
 from validitycriteria import check_validity, traverse_tree
@@ -88,7 +88,7 @@ def get_crestpoints(vertices):
             last_candidate = i
     
     max_crest = reduce(lambda v1, v2: v1 if v1[0] > v2[0] else v2, map(lambda idx: (vertices[idx, 1], idx), max_crest_ids), (-float('inf'), None))
-    min_crest = reduce(lambda v1, v2: v1 if v1[0] < v2[0] else v2, map(lambda idx: (vertices[idx, 1], idx), max_crest_ids), (float('inf'), None))
+    min_crest = reduce(lambda v1, v2: v1 if v1[0] < v2[0] else v2, map(lambda idx: (vertices[idx, 1], idx), min_crest_ids), (float('inf'), None))
 
     return max_crest_ids, min_crest_ids, max_crest[1], min_crest[1]
 
@@ -314,10 +314,17 @@ def merge_inter(new_vertices, sint_vertices, new_indices):
 def poly_subdivision(vertices):
     max_crest_ids, min_crest_ids, max_crest, min_crest = get_crestpoints(vertices)
     
+    if max_crest is None and min_crest is None:
+        raise ValueError("No crest points found! The polygon is not self-overlapping")
+    elif max_crest is None and min_crest is not None:
+        root_crest = min_crest
+    else:
+        root_crest = max_crest
+
     rays_max = compute_rays(vertices, max_crest_ids, -0.1)
     rays_min = compute_rays(vertices, min_crest_ids, 0.1)
 
-    rays_formulae = sort_rays(rays_max + rays_min, vertices[max_crest, 1])
+    rays_formulae = sort_rays(rays_max + rays_min, vertices[root_crest, 1])
     
     new_vertices, _ = compute_cut_points(vertices, rays_formulae, direction=-1.0, using_rays=True)
 
@@ -336,16 +343,39 @@ def poly_subdivision(vertices):
     # The root is then the right validity check of this cut
     visited, validity_tree = check_validity(left_idx, right_idx, new_vertices, new_max_crest_cuts, new_min_crest_cuts)
 
+    print(validity_tree)
+    for k in visited.keys():
+        print(k, visited[k])
+
+    root_id = list(validity_tree.keys())[0]
+
     plt.plot(new_vertices[:, 0], new_vertices[:, 1], 'b-')
+    plt.plot([new_vertices[-1, 0], new_vertices[0, 0]], [new_vertices[-1, 1], new_vertices[0, 1]], 'b-')
     for (_, rs_y, _), _ in rays_formulae:
         plt.plot([np.min(vertices[:, 0]) - 10, np.max(vertices[:, 0]) + 10], [rs_y, rs_y], 'c:')
     plt.show()
     
     valid_cuts_tree = traverse_tree(validity_tree, visited)
+    
     print(valid_cuts_tree)
-    print(validity_tree)
+
+    def print_tree(root, depth):
+        if not isinstance(root, dict):
+            return
+
+        for child_id in root.keys():
+            tree_str = ''
+            
+            for _ in range(depth):
+                tree_str += '\t|'
+            
+            print(tree_str + '-' + child_id)
+
+            print_tree(root[child_id], depth=depth + 1)
+    
+    print_tree(validity_tree, 0)
 
 
 if __name__ == '__main__':
-    vertices = blob.blob()
+    vertices = test_polys.test_1()
     poly_subdivision(vertices[0])

@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 import cv2
-import blob
+import test_polys
+
 
 def compute_area(poly):
     """
@@ -205,7 +206,7 @@ def check_holes(polys):
 
 if __name__ == '__main__':
     # vertices = np.array([[[20,20],[60,20],[60,60],[20,60],[10,50],[10,30],[30,30],[15,35],[20,40]]])*5
-    vertices = blob.mouse()
+    vertices = test_polys.test_3()
 
     # Check that the vertices are given in clockwise ordering
     rays_formulae = all_self_intersections(vertices[0])
@@ -218,8 +219,6 @@ if __name__ == '__main__':
 
     im = np.zeros([700, 700, 3], dtype=np.uint8)
     
-    cv2.drawContours(im, [vertices], 0, (255, 255, 255), 1)
-
     for x, y in new_vertices[new_vertices[:, 2].astype(np.int32) != -1, :2]:
         cv2.circle(im, (int(x), int(y)), 3, (0, 255, 0), -1)
     
@@ -233,6 +232,8 @@ if __name__ == '__main__':
     
     for hole in holes:
         cv2.drawContours(im, [hole.astype(np.int32)], 0, (0, 0, 0), -1)
+    
+    cv2.drawContours(im, vertices, 0, (255, 0, 0), 1)
     
     cv2.imshow('Filled poly', im)
     cv2.waitKey()
