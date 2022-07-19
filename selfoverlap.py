@@ -1,11 +1,16 @@
+from multiprocessing.sharedctypes import Value
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+from matplotlib.collections import PatchCollection
+
 import math
 import numpy as np
 
+import cv2
 import test_polys
 from functools import reduce
 
-from validitycriteria import check_validity, traverse_tree
+from validitycriteria import check_validity, traverse_tree, immerse_valid_tree, discover_polygons
 
 
 def get_root_indices(vertices):
@@ -120,10 +125,16 @@ def compute_rays(vertices, crest_ids, epsilon=1e-1):
     For maximum crests, give a negative epsion instead.
     """
     rays_formulae = []
+    existing_heights = []
     for ids in crest_ids:
         ray_src = np.array((vertices[ids, 0] - 1.0, vertices[ids, 1] + epsilon, 1))
         ray_dir = np.array((1.0, 0.0, 0.0))
-        rays_formulae.append((ray_src, ray_dir))
+        if len(existing_heights) == 0:
+            existing_heights.append(ray_src[1])
+            rays_formulae.append((ray_src, ray_dir))
+            
+        elif ray_src[1] not in existing_heights:
+            rays_formulae.append((ray_src, ray_dir))
     
     return rays_formulae
 
@@ -244,6 +255,7 @@ def sort_ray_cuts(new_vertices, rays_formulae, direction=1.0):
         all_sym_per_ray += list(int_symbols)
 
     new_vertices = np.hstack((new_vertices, np.zeros((new_vertices.shape[0], 2))))
+    # Fourth column contains the symbol of the cut, and the sixth column the index of that cut on the corresponding ray
     new_vertices[all_ord_per_ray, -2] = all_sym_per_ray
     new_vertices[all_ord_per_ray, -1] = all_idx_per_ray
 
@@ -306,25 +318,21 @@ def merge_inter(new_vertices, sint_vertices, new_indices):
     old_indices = np.setdiff1d(range(sint_vertices.shape[0]), new_indices)
     sint_vertices[old_indices, ...] = new_vertices
 
-    # Intersections will be marked as -2 in the third columns
+    # Intersections will be marked as -2 in the third column
     sint_vertices[new_indices, 2] = -2
     return sint_vertices
-    
+
 
 def poly_subdivision(vertices):
     max_crest_ids, min_crest_ids, max_crest, min_crest = get_crestpoints(vertices)
     
     if max_crest is None and min_crest is None:
         raise ValueError("No crest points found! The polygon is not self-overlapping")
-    elif max_crest is None and min_crest is not None:
-        root_crest = min_crest
-    else:
-        root_crest = max_crest
 
     rays_max = compute_rays(vertices, max_crest_ids, -0.1)
     rays_min = compute_rays(vertices, min_crest_ids, 0.1)
 
-    rays_formulae = sort_rays(rays_max + rays_min, vertices[root_crest, 1])
+    rays_formulae = sort_rays(rays_max + rays_min, vertices[:, 1].max())
     
     new_vertices, _ = compute_cut_points(vertices, rays_formulae, direction=-1.0, using_rays=True)
 
@@ -340,42 +348,132 @@ def poly_subdivision(vertices):
     
     left_idx, right_idx = get_root_indices(new_vertices)
 
-    # The root is then the right validity check of this cut
-    visited, validity_tree = check_validity(left_idx, right_idx, new_vertices, new_max_crest_cuts, new_min_crest_cuts)
 
-    print(validity_tree)
+    fig, ax = plt.subplots()
+    ax.plot(new_vertices[:, 0], new_vertices[:, 1], 'r-')
+    ax.plot(new_vertices[0, 0], new_vertices[0, 1], 'bx')
+    
+    shifted_indices = np.mod(left_idx + np.arange(new_vertices.shape[0]), new_vertices.shape[0])
+    r = right_idx - left_idx + 1 + (0 if right_idx > left_idx else new_vertices.shape[0])
+    ax.plot(new_vertices[shifted_indices[:r], 0], new_vertices[shifted_indices[:r], 1], 'y-.')
+    for (_, rs_y, _), _ in rays_formulae:
+        ax.plot([new_vertices[:, 0].min() - 10, new_vertices[:, 0].max() + 10], [rs_y, rs_y], 'c:')
+    for x, y, r, s, k in new_vertices[new_vertices[:, 2].astype(np.int32) >= 0, :]:
+        ax.text(x, y + 5, chr(97 + int(r)) + str(int(k)+1) + ('\'' if s < 0.5 else ''))
+    plt.show()
+
+    # The root is then the right validity check of this cut
+    visited = {}
+    _, root_id = check_validity(left_idx, right_idx, new_vertices, new_max_crest_cuts, new_min_crest_cuts, visited, check_left=False)
+
+    print('Validity tree root', root_id)
     for k in visited.keys():
         print(k, visited[k])
 
-    root_id = list(validity_tree.keys())[0]
+    print('\nTraversion tree')
+    polys_idx = []
+    valid_cuts_tree = traverse_tree(root_id, visited)
+    for k in visited.keys():
+        print(k, visited[k])
 
-    plt.plot(new_vertices[:, 0], new_vertices[:, 1], 'b-')
-    plt.plot([new_vertices[-1, 0], new_vertices[0, 0]], [new_vertices[-1, 1], new_vertices[0, 1]], 'b-')
-    for (_, rs_y, _), _ in rays_formulae:
-        plt.plot([np.min(vertices[:, 0]) - 10, np.max(vertices[:, 0]) + 10], [rs_y, rs_y], 'c:')
+    polys_idx = []
+    immersion = immerse_valid_tree(root_id, visited, polys_idx)
+    
+    def print_tree(tree, root=None, depth=0):        
+        print('|\t'*depth + '|-->' + (str(root) if root is not None else 'Root'))
+        for child in tree.keys():
+            print_tree(tree[child], child, depth+1)
+
+    print('Immersion')
+    print_tree(immersion)
+
+    print('Polys cut indices')
+    for poly in polys_idx:
+        print(poly)
+
+    polys = discover_polygons(polys_idx, new_vertices)
+
+    n_polys = len(polys)
+    n_rows = int(math.ceil(math.sqrt(n_polys)))
+    n_cols = int(math.ceil(n_polys / n_rows))
+    
+    fig, ax = plt.subplots()
+    
+    patches = []
+    for id, poly in enumerate(polys):
+        i = id // n_cols
+        j = id % n_cols
+        poly_test = np.copy(poly)
+        poly_test[:, 0] = poly[:, 0] + j * 512
+        poly_test[:, 1] = poly[:, 1] + i * 512
+        patches.append(Polygon(poly_test, True))
+        ax.plot(new_vertices[:, 0] + j*512, new_vertices[:, 1] + i*512, 'b-')
+        ax.plot([new_vertices[-1, 0] + j*512, new_vertices[0, 0] + j*512], [new_vertices[-1, 1] + i*512, new_vertices[0, 1] + i*512], 'b-')
+
+    colors = 100 * np.random.rand(len(polys))
+    p = PatchCollection(patches, alpha=0.5)
+    p.set_array(colors)
+    ax.add_collection(p)
+    
     plt.show()
-    
-    valid_cuts_tree = traverse_tree(validity_tree, visited)
-    
-    print(valid_cuts_tree)
 
-    def print_tree(root, depth):
-        if not isinstance(root, dict):
-            return
-
-        for child_id in root.keys():
-            tree_str = ''
-            
-            for _ in range(depth):
-                tree_str += '\t|'
-            
-            print(tree_str + '-' + child_id)
-
-            print_tree(root[child_id], depth=depth + 1)
-    
-    print_tree(validity_tree, 0)
+    return polys
 
 
 if __name__ == '__main__':
-    vertices = test_polys.test_1()
-    poly_subdivision(vertices[0])
+    vertices = test_polys.test_7()
+    # try:
+    polys = poly_subdivision(vertices[0])
+
+    fig, ax = plt.subplots()
+    
+    patches = []
+    for id, poly in enumerate(polys):
+        patches.append(Polygon(poly, True))
+
+    ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
+    ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
+
+    colors = 100 * np.random.rand(len(polys))
+    p = PatchCollection(patches, alpha=0.5)
+    p.set_array(colors)
+    ax.add_collection(p)
+    
+    plt.show()
+    # except ValueError:
+    #     print('Polygon is not self-overlapping')
+    
+    polys = vertices
+    
+    fig, ax = plt.subplots()
+    ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
+    ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
+
+    patches = []
+    for poly in polys:
+        patches.append(Polygon(poly, True))
+        
+    colors = 100 * np.random.rand(len(polys))
+    p = PatchCollection(patches, alpha=0.5)
+    p.set_array(colors)
+    ax.add_collection(p)
+    
+    plt.show()
+
+    im = np.zeros([700, 700, 3], dtype=np.uint8)
+    
+    cv2.drawContours(im, vertices, 0, (127, 127, 127), -1)
+    
+    for x, y in vertices[0]:
+        cv2.circle(im, (int(x), int(y)), 3, (0, 255, 0), -1)
+    
+    for p, poly in enumerate(polys):
+        color = int((p+1) / len(polys) * 255.0)
+        color = (color, color, color)
+        cv2.drawContours(im, [poly.astype(np.int32)], 0, color, -1)
+        
+    cv2.drawContours(im, vertices, 0, (255, 0, 0), 1)
+    
+    cv2.imshow('Filled poly', im)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
