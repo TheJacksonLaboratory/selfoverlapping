@@ -1,7 +1,5 @@
-from re import L
 import numpy as np
 import matplotlib.pyplot as plt
-from functools import reduce
 
 
 def get_alias_cut(a1, a2, vertices=None, plot_it=False, left2right=True):
@@ -107,12 +105,14 @@ def check_adjacency(a1, a2, vertices, left2right=True):
 
 
 def condition_1(a1, a2, vertices, check_left=True, **kwargs):
+    children_ids = []
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
-        return None, []
+        return None, children_ids
 
     is_valid = check_adjacency(a1, a2, vertices, left2right=check_left)
-
-    return is_valid, []
+    if is_valid: 
+        children_ids.append([])
+    return is_valid, children_ids
 
 
 def condition_2(a1, a2, vertices, check_left=True, **kwargs):
@@ -212,7 +212,7 @@ def condition_4(a1, a2, vertices, check_left=True, **kwargs):
     if len(ver_in_ray_ids) < 4:
         return None, children_ids
     
-    a3 = get_cut(a2, vertices, next_cut=not check_left, same_ray=True, sign=1)
+    a3 = get_cut(a2, vertices, next_cut=True, same_ray=True, sign=1)
     if a3 is None:
         return None, children_ids
 
@@ -371,7 +371,7 @@ def invalid_condition_2(a1, a2, vertices):
     return not (vertices[a1, -1] < vertices[a3, -1] < vertices[a2, -1])
 
 
-def invalid_condition_3(a1, a2, vertices):
+def invalid_condition_3(a1, a2, vertices, tolerance=1e-4):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
@@ -393,17 +393,19 @@ def invalid_condition_3(a1, a2, vertices):
     r_2 = (a2 - b1 - 1) + (0 if a2 > b1 else n_vertices)
     
     b2_a1_int = list(np.where(vertices[shifted_indices_1[:r_1], 2].astype(np.int32) < -1)[0])
-    b2_a1_int = set(shifted_indices_1[b2_a1_int])
-        
     a2_b1_int = list(np.where(vertices[shifted_indices_2[:r_2], 2].astype(np.int32) < -1)[0])
-    a2_b1_int = set(shifted_indices_2[a2_b1_int])
 
     # This condition does not apply if only one segment contains any intersection
     if len(b2_a1_int) == 0 or len(a2_b1_int) == 0:
         return None
 
+    int_1 = vertices[shifted_indices_1[b2_a1_int], :2]
+    int_1 = int_1 / np.linalg.norm(int_1, axis=1)[..., np.newaxis]
+    int_2 = vertices[shifted_indices_2[a2_b1_int], :2]
+    int_2 = int_2 / np.linalg.norm(int_2, axis=1)[..., np.newaxis]
+
     # If there is at least one intersection point in both segments, this cut is right invalid
-    return not len(b2_a1_int.intersection(a2_b1_int)) > 0
+    return not (np.matmul(int_1, int_2.transpose()) >= 1 - tolerance).any()
 
 
 all_valid_conditions = [condition_1, condition_2, condition_3, condition_4, condition_5]

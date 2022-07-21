@@ -394,6 +394,8 @@ def poly_subdivision(vertices):
     polys = discover_polygons(polys_idx, new_vertices)
 
     n_polys = len(polys)
+    if n_polys == 0:
+        raise ValueError("Couldn\'t split main poly ... check if it is actually self-overlapping")
     n_rows = int(math.ceil(math.sqrt(n_polys)))
     n_cols = int(math.ceil(n_polys / n_rows))
     
@@ -421,59 +423,61 @@ def poly_subdivision(vertices):
 
 
 if __name__ == '__main__':
-    vertices = test_polys.test_7()
-    # try:
-    polys = poly_subdivision(vertices[0])
+    for poly_test in [test_polys.test_1, test_polys.test_2, test_polys.test_3, test_polys.test_4, test_polys.test_5, test_polys.test_6, test_polys.test_7, test_polys.test_8, test_polys.test_9, test_polys.test_10]:
+        vertices = poly_test()
 
-    fig, ax = plt.subplots()
-    
-    patches = []
-    for id, poly in enumerate(polys):
-        patches.append(Polygon(poly, True))
+        try:
+            polys = poly_subdivision(vertices[0])
 
-    ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
-    ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
+            fig, ax = plt.subplots()
+            
+            patches = []
+            for id, poly in enumerate(polys):
+                patches.append(Polygon(poly, True))
 
-    colors = 100 * np.random.rand(len(polys))
-    p = PatchCollection(patches, alpha=0.5)
-    p.set_array(colors)
-    ax.add_collection(p)
-    
-    plt.show()
-    # except ValueError:
-    #     print('Polygon is not self-overlapping')
-    
-    polys = vertices
-    
-    fig, ax = plt.subplots()
-    ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
-    ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
+            ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
+            ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
 
-    patches = []
-    for poly in polys:
-        patches.append(Polygon(poly, True))
+            colors = 100 * np.random.rand(len(polys))
+            p = PatchCollection(patches, alpha=0.5)
+            p.set_array(colors)
+            ax.add_collection(p)
+            
+            plt.show()
+        except ValueError:
+            print('Polygon is not self-overlapping')
         
-    colors = 100 * np.random.rand(len(polys))
-    p = PatchCollection(patches, alpha=0.5)
-    p.set_array(colors)
-    ax.add_collection(p)
-    
-    plt.show()
-
-    im = np.zeros([700, 700, 3], dtype=np.uint8)
-    
-    cv2.drawContours(im, vertices, 0, (127, 127, 127), -1)
-    
-    for x, y in vertices[0]:
-        cv2.circle(im, (int(x), int(y)), 3, (0, 255, 0), -1)
-    
-    for p, poly in enumerate(polys):
-        color = int((p+1) / len(polys) * 255.0)
-        color = (color, color, color)
-        cv2.drawContours(im, [poly.astype(np.int32)], 0, color, -1)
+        polys = vertices
         
-    cv2.drawContours(im, vertices, 0, (255, 0, 0), 1)
-    
-    cv2.imshow('Filled poly', im)
-    cv2.waitKey()
-    cv2.destroyAllWindows()
+        fig, ax = plt.subplots()
+        ax.plot(vertices[0][:, 0], vertices[0][:, 1], 'b-')
+        ax.plot([vertices[0][-1, 0], vertices[0][0, 0]], [vertices[0][-1, 1], vertices[0][0, 1]], 'b-')
+
+        patches = []
+        for poly in polys:
+            patches.append(Polygon(poly, True))
+            
+        colors = 100 * np.random.rand(len(polys))
+        p = PatchCollection(patches, alpha=0.5)
+        p.set_array(colors)
+        ax.add_collection(p)
+        
+        plt.show()
+
+        im = np.zeros([700, 700, 3], dtype=np.uint8)
+        
+        cv2.drawContours(im, vertices, 0, (127, 127, 127), -1)
+        
+        for x, y in vertices[0]:
+            cv2.circle(im, (int(x), int(y)), 3, (0, 255, 0), -1)
+        
+        for p, poly in enumerate(polys):
+            color = int((p+1) / len(polys) * 255.0)
+            color = (color, color, color)
+            cv2.drawContours(im, [poly.astype(np.int32)], 0, color, -1)
+            
+        cv2.drawContours(im, vertices, 0, (255, 0, 0), 1)
+        
+        cv2.imshow('Filled poly', im)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
