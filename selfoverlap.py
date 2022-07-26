@@ -1,4 +1,3 @@
-from multiprocessing.sharedctypes import Value
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
@@ -378,7 +377,7 @@ def poly_subdivision(vertices):
 
     polys_idx = []
     immersion = immerse_valid_tree(root_id, visited, polys_idx)
-    
+
     def print_tree(tree, root=None, depth=0):        
         print('|\t'*depth + '|-->' + (str(root) if root is not None else 'Root'))
         for child in tree.keys():

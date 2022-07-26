@@ -110,7 +110,8 @@ def condition_1(a1, a2, vertices, check_left=True, **kwargs):
         return None, children_ids
 
     is_valid = check_adjacency(a1, a2, vertices, left2right=check_left)
-    if is_valid: 
+    if is_valid:
+        # children_ids.append([(*get_alias_cut(a1, a2, vertices, left2right=check_left), 1)])
         children_ids.append([])
     return is_valid, children_ids
 
@@ -135,6 +136,8 @@ def condition_2(a1, a2, vertices, check_left=True, **kwargs):
         return None, children_ids
 
     is_valid, child_id = check_validity(b1, b2, vertices, check_left=check_left, **kwargs)
+    child_id = (*child_id, 2)
+
     children_ids.append([child_id])
     is_valid = None if isinstance(is_valid, str) and is_valid == 'Explored' else is_valid
     
@@ -176,9 +179,11 @@ def condition_3(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if point a3' and a1 are left/right valid
         is_valid_1, child_id_1 = check_validity(a1, a3, vertices, check_left=check_left, **kwargs)
+        child_id_1 = (*child_id_1, 3)
 
         # Check if point a2' and a4 are left/right valid
         is_valid_2, child_id_2 = check_validity(a4, a2, vertices, check_left=check_left, **kwargs)
+        child_id_2 = (*child_id_2, 3)
 
         children_ids.append([child_id_1, child_id_2])
         is_valid_2 = None if isinstance(is_valid_2, str) and is_valid_2 == 'Explored' else is_valid_2
@@ -235,9 +240,11 @@ def condition_4(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if that point and a1 are left/right valid
         is_valid_1, child_id_1 = check_validity(a1, a_p, vertices, check_left=check_left, **kwargs)
+        child_id_1 = (*child_id_1, 4)
 
         # Check if that point and a3 are right/left valid
         is_valid_2, child_id_2 = check_validity(a3, a_p, vertices, check_left=not check_left, **kwargs)
+        child_id_2 = (*child_id_2, 4)
 
         children_ids.append([child_id_1, child_id_2])
 
@@ -293,9 +300,11 @@ def condition_5(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if that point and a1 are right valid
         is_valid_1, child_id_1 = check_validity(a_p, a2, vertices, check_left=check_left, **kwargs)
+        child_id_1 = (*child_id_1, 5)
 
         # Check if that point and a3 are left valid
         is_valid_2, child_id_2 = check_validity(a_p, a3, vertices, check_left=not check_left, **kwargs)
+        child_id_2 = (*child_id_2, 5)
 
         children_ids.append([child_id_1, child_id_2])
 
@@ -408,7 +417,7 @@ def invalid_condition_3(a1, a2, vertices, tolerance=1e-4):
     return not (np.matmul(int_1, int_2.transpose()) >= 1 - tolerance).any()
 
 
-all_valid_conditions = [condition_1, condition_2, condition_3, condition_4, condition_5]
+all_valid_conditions = [condition_5, condition_4, condition_3, condition_2, condition_1]
 all_invalid_conditions = [invalid_condition_1, invalid_condition_2, invalid_condition_3]
 
 
@@ -448,12 +457,14 @@ def check_validity(a1, a2, vertices, max_crest_cuts, min_crest_cuts, visited, ch
 
 
 def traverse_tree(root, visited, path=None):
+    root = root if len(root) == 3 else root[:-1]
+
     if path is None:
         path = []
     elif root in path:
         return None
     
-    validity, cond_dep = visited[root]
+    validity, cond_dep = visited.get(root, (True, []))
     if len(cond_dep) == 0:
         return validity
 
@@ -475,10 +486,15 @@ def traverse_tree(root, visited, path=None):
 def immerse_valid_tree(root, visited, polys_idx):
     """ Traverse only one of the valid immersions for simplicity
     """
+    root = root if len(root) == 3 else root[:-1]
     immersion = {root:{}}
     sub_poly = root[:2]
 
-    for sib_cond in visited[root][1]:
+    conditions = visited.get(root, None)
+    if conditions is None:
+        return {}
+
+    for sib_cond in conditions[1]:
         for child in sib_cond:
             sub_immersion = immerse_valid_tree(child, visited, polys_idx)
             immersion[root].update(sub_immersion)
