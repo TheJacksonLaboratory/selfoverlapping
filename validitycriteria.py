@@ -2,18 +2,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def get_shifted_indices(a1, a2, n_vertices, exclude_start=True, exclude_end=True):
+    shifted_indices = np.mod(a1 + np.arange(n_vertices), n_vertices)
+    r = a2 - a1 + 1 + (0 if a2 > a1 else n_vertices)
+    return shifted_indices[exclude_start:r - exclude_end]
+
+
 def get_alias_cut(a1, a2, vertices=None, plot_it=False, left2right=True):
     if vertices is not None:
         left_node = '%s%i%s' % (chr(97 + int(vertices[a1, 2])), int(vertices[a1, -1])+1, '\'' if vertices[a1, -2] < 0.5 else '')
         right_node = '%s%i%s' % (chr(97 + int(vertices[a2, 2])), int(vertices[a2, -1])+1, '\'' if vertices[a2, -2] < 0.5 else '')
         # path = (a1 if left2right else a2, a2 if left2right else a1, left_node + ',' + right_node + (',L' if left2right else ',R'))
-        path = (a1 if left2right else a2, a2 if left2right else a1, left_node + ',' + right_node + (',L' if left2right else ',R'))
+        path = (a1, a2, left_node + ',' + right_node + (',L' if left2right else ',R'))
 
-    elif left2right:
-        path = (a1, a2)
-    
     else:
-        path = (a2, a1)
+        path = (a1, a2)
 
     if plot_it:
         plt.plot(vertices[:, 0], vertices[:, 1], 'b:')
@@ -112,7 +115,7 @@ def condition_1(a1, a2, vertices, check_left=True, **kwargs):
     is_valid = check_adjacency(a1, a2, vertices, left2right=check_left)
     if is_valid:
         # children_ids.append([(*get_alias_cut(a1, a2, vertices, left2right=check_left), 1)])
-        children_ids.append([])
+        children_ids.append([(-1, -1, 'self', '1%s' % ('L' if check_left else 'R'))])
     return is_valid, children_ids
 
 
@@ -136,7 +139,7 @@ def condition_2(a1, a2, vertices, check_left=True, **kwargs):
         return None, children_ids
 
     is_valid, child_id = check_validity(b1, b2, vertices, check_left=check_left, **kwargs)
-    child_id = (*child_id, 2)
+    child_id = (*child_id, '2%s' % ('L' if check_left else 'R'))
 
     children_ids.append([child_id])
     is_valid = None if isinstance(is_valid, str) and is_valid == 'Explored' else is_valid
@@ -179,11 +182,11 @@ def condition_3(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if point a3' and a1 are left/right valid
         is_valid_1, child_id_1 = check_validity(a1, a3, vertices, check_left=check_left, **kwargs)
-        child_id_1 = (*child_id_1, 3)
+        child_id_1 = (*child_id_1, '3%s' % ('L' if check_left else 'R'))
 
         # Check if point a2' and a4 are left/right valid
         is_valid_2, child_id_2 = check_validity(a4, a2, vertices, check_left=check_left, **kwargs)
-        child_id_2 = (*child_id_2, 3)
+        child_id_2 = (*child_id_2, '3%s' % ('L' if check_left else 'R'))
 
         children_ids.append([child_id_1, child_id_2])
         is_valid_2 = None if isinstance(is_valid_2, str) and is_valid_2 == 'Explored' else is_valid_2
@@ -240,11 +243,11 @@ def condition_4(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if that point and a1 are left/right valid
         is_valid_1, child_id_1 = check_validity(a1, a_p, vertices, check_left=check_left, **kwargs)
-        child_id_1 = (*child_id_1, 4)
+        child_id_1 = (*child_id_1, '4%s' % ('L' if check_left else 'R'))
 
         # Check if that point and a3 are right/left valid
         is_valid_2, child_id_2 = check_validity(a3, a_p, vertices, check_left=not check_left, **kwargs)
-        child_id_2 = (*child_id_2, 4)
+        child_id_2 = (*child_id_2, '4%s' % ('L' if check_left else 'R'))
 
         children_ids.append([child_id_1, child_id_2])
 
@@ -300,11 +303,11 @@ def condition_5(a1, a2, vertices, check_left=True, **kwargs):
 
         # Check if that point and a1 are right valid
         is_valid_1, child_id_1 = check_validity(a_p, a2, vertices, check_left=check_left, **kwargs)
-        child_id_1 = (*child_id_1, 5)
+        child_id_1 = (*child_id_1, '5%s' % ('L' if check_left else 'R'))
 
         # Check if that point and a3 are left valid
         is_valid_2, child_id_2 = check_validity(a_p, a3, vertices, check_left=not check_left, **kwargs)
-        child_id_2 = (*child_id_2, 5)
+        child_id_2 = (*child_id_2, '5%s' % ('L' if check_left else 'R'))
 
         children_ids.append([child_id_1, child_id_2])
 
@@ -483,30 +486,111 @@ def traverse_tree(root, visited, path=None):
     return validity
 
 
-def immerse_valid_tree(root, visited, polys_idx):
+def immerse_valid_tree(root, visited, n_vertices, polys_idx):
     """ Traverse only one of the valid immersions for simplicity
     """
-    root = root if len(root) == 3 else root[:-1]
     immersion = {root:{}}
-    sub_poly = root[:2]
+    conditions = visited.get(root if len(root) == 3 else root[:-1], None)
 
-    conditions = visited.get(root, None)
-    if conditions is None:
-        return {}
+    a1, a2 = root[:2]
+    left2right = root[2][-1] == 'L'
+    sub_poly = []
 
+    if conditions[1][0][0][0] < 0:
+        # When a cut that is left/right valid by condition 1, the base case is reached
+        if left2right:
+            sub_poly.append(get_shifted_indices(a1, a2, n_vertices, exclude_start=False, exclude_end=False))
+        else:
+            sub_poly.append(get_shifted_indices(a2, a1, n_vertices, exclude_start=False, exclude_end=False))
+
+        return immersion, sub_poly
+            
     for sib_cond in conditions[1]:
-        for child in sib_cond:
-            sub_immersion = immerse_valid_tree(child, visited, polys_idx)
-            immersion[root].update(sub_immersion)
-            sub_poly += child[:2]
-        break
-    
-    if len(visited[root][1]) > 0:
-        sub_poly = list(sorted(set(sub_poly)))
-        sub_poly += [sub_poly[0]]
-        polys_idx.append(sub_poly)
+        if len(sib_cond) == 1:
+            child = sib_cond[0]
+            child_cond_id = child[-1][0]
+            child_left2right = child[-1][1] == 'L'
 
-    return immersion
+            sub_immersion, child_poly = immerse_valid_tree(child, visited, n_vertices,polys_idx)
+            immersion[root].update(sub_immersion)
+
+            # If this cut was selected by complying with condition 2, add the child path, and send it to the parent path
+            b1, b2 = child[:2]
+            if child_cond_id == '2':
+                if child_left2right:
+                    exclude_child_end = False if len(child_poly) == 0 else child_poly[0][0] in [a1, b1]
+                    exclude_child_start = False if len(child_poly) == 0 else child_poly[-1][-1] in [a2, b2]
+                    
+                    sub_poly.append(get_shifted_indices(a1, b1, n_vertices, exclude_start=False, exclude_end=exclude_child_end))
+                    sub_poly += child_poly
+                    sub_poly.append(get_shifted_indices(b2, a2, n_vertices, exclude_start=exclude_child_start, exclude_end=False))
+                else:
+                    exclude_child_end = False if len(child_poly) == 0 else child_poly[0][0] in [a2, b2]
+                    exclude_child_start = False if len(child_poly) == 0 else child_poly[-1][-1] in [a1, b1]
+
+                    sub_poly.append(get_shifted_indices(a2, b2, n_vertices, exclude_start=False, exclude_end=exclude_child_end))
+                    sub_poly += child_poly
+                    sub_poly.append(get_shifted_indices(b1, a1, n_vertices, exclude_start=exclude_child_start, exclude_end=False))
+            else:
+                sub_poly = child_poly
+
+        else:
+            child_1, child_2 = sib_cond
+            child_cond_id = child_1[-1][0]
+            child_left2right = child_1[-1][1] == 'L'
+
+            if child_cond_id == '3':
+                sub_immersion, child_poly = immerse_valid_tree(child_1, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                polys_idx.append(np.concatenate(child_poly, axis=0))
+
+                sub_immersion, child_poly = immerse_valid_tree(child_2, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                polys_idx.append(np.concatenate(child_poly, axis=0))
+
+                if child_left2right:
+                    sub_poly.append(get_shifted_indices(child_1[1], child_2[0], n_vertices, exclude_start=False, exclude_end=False))
+                else:
+                    sub_poly.append(get_shifted_indices(child_2[0], child_1[1], n_vertices, exclude_start=False, exclude_end=False))
+
+            elif child_cond_id == '4':
+                sub_immersion, child_poly = immerse_valid_tree(child_1, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                sub_poly += child_poly
+
+                if child_left2right:
+                    sub_poly.append(get_shifted_indices(child_2[0], a2, n_vertices, exclude_start=False, exclude_end=False))
+                else:
+                    sub_poly.append(get_shifted_indices(a2, child_2[0], n_vertices, exclude_start=False, exclude_end=False))
+
+                polys_idx.append(np.concatenate(sub_poly, axis=0))
+
+                sub_immersion, child_poly = immerse_valid_tree(child_2, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                polys_idx.append(np.concatenate(child_poly, axis=0))
+                
+                sub_poly = []
+
+            elif child_cond_id == '5':
+                sub_immersion, child_poly = immerse_valid_tree(child_1, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                sub_poly += child_poly
+                
+                if child_left2right:
+                    sub_poly.append(get_shifted_indices(a1, child_2[1], n_vertices, exclude_start=False, exclude_end=False))
+                else:
+                    sub_poly.append(get_shifted_indices(child_2[1], a1, n_vertices, exclude_start=False, exclude_end=False))
+
+                polys_idx.append(np.concatenate(sub_poly, axis=0))
+
+                sub_immersion, child_poly = immerse_valid_tree(child_2, visited, n_vertices,polys_idx)
+                immersion[root].update(sub_immersion)
+                polys_idx.append(np.concatenate(child_poly, axis=0))
+
+                sub_poly = []
+        break   
+
+    return immersion, sub_poly
 
     
 def discover_polygons(polys_idx, vertices):
@@ -514,21 +598,6 @@ def discover_polygons(polys_idx, vertices):
     n_vertices = vertices.shape[0]
 
     for poly_ids in polys_idx:
-        sub_poly = []
-        for a1, a2 in zip(poly_ids[1:], poly_ids[:-1]):
-            left2right = check_adjacency(a1, a2, vertices, True)
-            right2left = check_adjacency(a1, a2, vertices, False)
-
-            if left2right:
-                shifted_indices = np.mod(a1 + np.arange(n_vertices), n_vertices)
-                r = a2 - a1 + 1
-            elif right2left:
-                shifted_indices = np.mod(a2 + np.arange(n_vertices), n_vertices)
-                r = a1 - a2 + 1
-            else:
-                r = 0
-            sub_poly.append(vertices[shifted_indices[:r], :2])
-            
-        polys.append(np.vstack(sub_poly))
+        polys.append(vertices[poly_ids, :2])
 
     return polys

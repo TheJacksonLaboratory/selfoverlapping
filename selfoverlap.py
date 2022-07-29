@@ -375,8 +375,14 @@ def poly_subdivision(vertices):
     for k in visited.keys():
         print(k, visited[k])
 
-    polys_idx = []
-    immersion = immerse_valid_tree(root_id, visited, polys_idx)
+    # Add the left valid cut from the root of the immersion tree
+    n_vertices = new_vertices.shape[0]
+    shifted_indices = np.mod(left_idx + np.arange(n_vertices), n_vertices)
+    r = right_idx - left_idx + 1 + (0 if right_idx > left_idx else n_vertices)
+    
+    immersion, sub_poly = immerse_valid_tree(root_id, visited, new_vertices.shape[0], polys_idx)
+    sub_poly = [shifted_indices[:r]] + sub_poly
+    polys_idx.insert(0, np.concatenate(sub_poly, axis=0))
 
     def print_tree(tree, root=None, depth=0):        
         print('|\t'*depth + '|-->' + (str(root) if root is not None else 'Root'))
@@ -444,6 +450,8 @@ if __name__ == '__main__':
             
             plt.show()
         except ValueError:
+            print('Polygon is not self-overlapping')
+        except IndexError:
             print('Polygon is not self-overlapping')
         
         polys = vertices
