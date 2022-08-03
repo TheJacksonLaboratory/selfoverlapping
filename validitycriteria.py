@@ -29,7 +29,7 @@ def _get_shifted_indices(a1, a2, n_vertices, exclude_start=True, exclude_end=Tru
 
 
 def _get_cut_id(a1, a2, left2right=True):
-    """ Generate an identificator key for the cut between a1 and a2.
+    """ Generate an identifier key for the cut between a1 and a2.
 
     Parameters
     ----------
@@ -51,13 +51,13 @@ def _get_cut_id(a1, a2, left2right=True):
     return cut_id
 
 
-def get_cut(a, vertices, next_cut=True, same_ray=True, sign=0):
+def _get_cut(a, vertices, next_cut=True, same_ray=True, sign=0):
     """ Looks for the next/previous valid vertex that can be used as cut along with vertex `a`.
 
     Parameters
     ----------
     a : int
-        An index of a vertex on the polygon used as reference to look for a cut.
+        An index of a vertex on the polygon used as reference to look for a cut that satisfyes the given conditions.
     vertices : numpy.ndarray
         The array containing the information about the polygon and the characteristics of each vertex.
     next_cut : bool, optional
@@ -210,8 +210,8 @@ def _condition_2(a1, a2, vertices, check_left=True, **kwargs):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None, children_ids
     
-    b1 = get_cut(a1, vertices, next_cut=check_left, same_ray=False, sign=1)
-    b2 = get_cut(a2, vertices, next_cut=not check_left, same_ray=False, sign=-1)
+    b1 = _get_cut(a1, vertices, next_cut=check_left, same_ray=False, sign=1)
+    b2 = _get_cut(a2, vertices, next_cut=not check_left, same_ray=False, sign=-1)
 
     if b1 is None or b2 is None or not (_check_adjacency(a1, b1, vertices, left2right=check_left) and _check_adjacency(b2, a2, vertices, left2right=check_left)):
         return None, children_ids
@@ -346,7 +346,7 @@ def _condition_4(a1, a2, vertices, check_left=True, **kwargs):
     if len(ver_in_ray_ids) < 4:
         return None, children_ids
     
-    a3 = get_cut(a2, vertices, next_cut=True, same_ray=True, sign=1)
+    a3 = _get_cut(a2, vertices, next_cut=True, same_ray=True, sign=1)
     if a3 is None:
         return None, children_ids
 
@@ -363,7 +363,7 @@ def _condition_4(a1, a2, vertices, check_left=True, **kwargs):
     while int(vertices[a_p, -1]) < n_vertices_on_ray:
         set_id += 1
 
-        a_p = get_cut(a_p, vertices, next_cut=True, same_ray=True, sign=-1)
+        a_p = _get_cut(a_p, vertices, next_cut=True, same_ray=True, sign=-1)
         if a_p is None:
             break
 
@@ -429,7 +429,7 @@ def _condition_5(a1, a2, vertices, check_left=True, **kwargs):
     if len(ver_in_ray_ids) < 4:
         return None, children_ids
 
-    a3 = get_cut(a1, vertices, next_cut=False, same_ray=True, sign=-1)
+    a3 = _get_cut(a1, vertices, next_cut=False, same_ray=True, sign=-1)
     if a3 is None:
         return None, children_ids
     
@@ -444,7 +444,7 @@ def _condition_5(a1, a2, vertices, check_left=True, **kwargs):
     while int(vertices[a_p, -1]) > 0:
         set_id += 1
 
-        a_p = get_cut(a_p, vertices, next_cut=False, same_ray=True, sign=1)
+        a_p = _get_cut(a_p, vertices, next_cut=False, same_ray=True, sign=1)
         if a_p is None:
             break
 
@@ -510,7 +510,7 @@ def _invalidity_condition_1(a1, a2, vertices):
     if len(ver_in_ray_ids) < 3:
         return None
 
-    a3 = get_cut(a1, vertices, next_cut=True, same_ray=True, sign=-1)
+    a3 = _get_cut(a1, vertices, next_cut=True, same_ray=True, sign=-1)
     
     if a3 is None:
         return None
@@ -555,7 +555,7 @@ def _invalidity_condition_2(a1, a2, vertices):
     if len(ver_in_ray_ids) < 3:
         return None
 
-    a3 = get_cut(a2, vertices, next_cut=False, same_ray=True, sign=-1)
+    a3 = _get_cut(a2, vertices, next_cut=False, same_ray=True, sign=-1)
     
     if a3 is None:
         return None
@@ -588,8 +588,8 @@ def _invalidity_condition_3(a1, a2, vertices, tolerance=1e-4):
     if vertices[a1, 3] < 0.5 or vertices[a2, 3] > 0.5:
         return None
     
-    b2 = get_cut(a1, vertices, next_cut=True, same_ray=False, sign=0)
-    b1 = get_cut(a2, vertices, next_cut=False, same_ray=False, sign=0)
+    b2 = _get_cut(a1, vertices, next_cut=True, same_ray=False, sign=0)
+    b1 = _get_cut(a2, vertices, next_cut=False, same_ray=False, sign=0)
 
     if b1 is None or b2 is None:
         return None
@@ -875,7 +875,7 @@ def discover_polygons(polys_idx, vertices):
     Returns
     -------
     polys : list
-        A list of numpy.ndarrays with the vertuces positions (x, y) of the non-overlapping sub-polygons.
+        A list of numpy.ndarrays with the vertices positions (x, y) of the non-overlapping sub-polygons.
     """
     polys = []
     n_vertices = vertices.shape[0]
