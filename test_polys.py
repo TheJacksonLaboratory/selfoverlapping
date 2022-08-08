@@ -957,7 +957,6 @@ def create_poly(src_filename=None):
             self.cid = self._ax.figure.canvas.mpl_connect('button_press_event', self)
 
         def __call__(self, event):
-            print('click', event)
             if event.inaxes!=self._ax.axes: return
             
             if self.line is None:
